@@ -1,0 +1,58 @@
+name: GitHub Actions Build and Deploy Demo
+
+on:
+  push:
+    branches:
+      - master          # 触发分支，按需改成 main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    permissions:         # v4 必需，避免 403
+      contents: write
+
+    steps:
+      # 1️⃣ 检出源码
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2️⃣ 安装依赖
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          # 暂时禁用缓存以避免 rollup 原生依赖问题
+          # cache: 'npm'
+
+      - name: Install dependencies
+        env:
+          # 强制重新下载可选依赖
+          npm_config_optional: true
+        run: |
+          # 处理 rollup 原生依赖的已知 npm bug
+          npm cache clean --force
+          rm -rf node_modules package-lock.json
+          npm install --force
+
+      # 验证 vite 和 rollup 安装
+      - name: Verify dependencies installation
+        run: |
+          echo "检查 Vite 版本..."
+          npx vite --version
+          echo "检查 Rollup 是否正确安装..."
+          npm list rollup
+          echo "检查原生依赖..."
+          ls -la node_modules/@rollup/ || echo "rollup 原生依赖目录不存在"
+
+      # 3️⃣ 构建产物
+      - name: Build
+        run: npm run build
+
+      # 4️⃣ 部署到 gh-pages
+      - name: Deploy
+        uses: JamesIves/github-pages-deploy-action@v4.7.3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}   # 或 PAT
+          branch: gh-pages
+          folder: dist                         # 产物目录
